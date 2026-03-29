@@ -515,7 +515,12 @@ async function runScan() {
     const dateStr = new Date().toISOString().split('T')[0];
     saveJSON(join(HISTORY_DIR, `${dateStr}.json`), signalOutput);
     
-    undefined
+    // 8. Send WhatsApp alerts for actionable signals (BUY, SELL, DANGER only)
+    const actionableSignals = signals.filter(s => ['BUY', 'SELL', 'DANGER'].includes(s.type));
+    if (actionableSignals.length > 0) {
+      const alertMsg = formatAlertMessage(actionableSignals);
+      if (alertMsg) sendWhatsApp(alertMsg);
+    }
     
     const elapsed = ((Date.now() - scanStart) / 1000).toFixed(1);
     log(`Scan complete in ${elapsed}s — ${signals.length} signals (${actionableSignals.length} actionable)`, 'success');
