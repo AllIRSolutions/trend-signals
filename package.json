@@ -1,0 +1,15 @@
+{
+  "name": "trend-signals",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Crypto Trend-to-Trade Signal system - cross-references Google Trends with crypto prices",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node index.js --once"
+  },
+  "dependencies": {
+    "google-trends-api": "^4.9.2",
+    "node-cron": "^3.0.3"
+  }
+}
