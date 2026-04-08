@@ -500,33 +500,6 @@ async function runScan() {
     saveJSON(SIGNALS_FILE, signalOutput);
     log(`Saved ${signals.length} signals to signals.json`);
     
-    // AUTO-OVERRIDE: Feed strong signals to Gunbot override + Earn manager
-    try {
-      const gunbotPairs = ["DASH", "SOL", "LINK", "XRP", "AVAX", "SUI"];
-      const strongSignals = signals.filter(s => s.confidence >= 75 && gunbotPairs.some(p => s.coin.toUpperCase().includes(p)));
-      if (strongSignals.length > 0) {
-        const batch = strongSignals.map(s => ({
-          pair: s.coin.replace("USDT", ""),
-          signal: (s.type === "BUY" ? "STRONG_BUY" : s.type === "SELL" ? "STRONG_SELL" : null)
-        })).filter(s => s.signal);
-        if (batch.length > 0) {
-          const fs = require("fs");
-          fs.writeFileSync("/tmp/latest-signals.json", JSON.stringify(batch));
-          const { execSync } = require("child_process");
-          execSync("node /home/kabelo/signal-override.js --batch /tmp/latest-signals.json 2>>/home/kabelo/signal-override.log", { timeout: 30000 });
-          log("Auto-override applied for " + batch.length + " signal(s): " + batch.map(b => b.pair + "=" + b.signal).join(", "));
-        // Also trigger Earn Manager for strong signals
-        try {
-          const earnBatch = batch.filter(b => b.signal === "STRONG_SELL" || b.signal === "STRONG_BUY");
-          for (const s of earnBatch) {
-            execSync("cd /home/kabelo/earn-manager && node run.js --signal " + s.signal + " --asset " + s.pair + " 2>>/home/kabelo/earn-manager/earn-manager.log", { timeout: 60000 });
-          }
-          log("Auto-Earn management applied for " + earnBatch.length + " signal(s)");
-        } catch (earnErr) { log("Auto-Earn error: " + earnErr.message, "warn"); }
-        }
-      }
-    } catch (err) { log("Auto-override error: " + err.message, "warn"); }
-
     // 6. Save to history
     const history = loadJSON(TREND_HISTORY_FILE) || { runs: [] };
     history.runs.push({
