@@ -75,7 +75,7 @@ function sendWhatsApp(message) {
   try {
     const escaped = message.replace(/"/g, '\\"').replace(/`/g, '\\`').replace(/\$/g, '\\$');
     execSync(
-      `sudo docker exec -e OPENCLAW_GATEWAY_TOKEN=e908160113308e6fefefda1c603a5014bfdbabc7d92230acdf11329a4674e773 openclaw-source-backup-openclaw-gateway-1 node /app/openclaw.mjs message send --channel whatsapp --target "${WHATSAPP_TARGET}" --message "${escaped}"`,
+      `sudo docker exec -e OPENCLAW_GATEWAY_TOKEN=9e2c9171fc1b9990c0c5ec95a0d8ebe01397e891af3cd38c5b936216718a8c66 openclaw-source-backup-openclaw-gateway-1 node /app/openclaw.mjs message send --channel whatsapp --target "${WHATSAPP_TARGET}" --message "${escaped}"`,
       { timeout: 30000, stdio: 'pipe' }
     );
     log(`WhatsApp alert sent`, 'success');
