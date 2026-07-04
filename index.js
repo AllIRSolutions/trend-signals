@@ -542,7 +542,7 @@ async function runScan() {
     const dateStr = new Date().toISOString().split('T')[0];
     saveJSON(join(HISTORY_DIR, `${dateStr}.json`), signalOutput);
     
-    undefined
+    
     
     const elapsed = ((Date.now() - scanStart) / 1000).toFixed(1);
     log(`Scan complete in ${elapsed}s — ${signals.length} signals (${actionableSignals.length} actionable)`, 'success');
