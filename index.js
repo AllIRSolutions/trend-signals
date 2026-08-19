@@ -13,7 +13,8 @@
  * Runs every 30 minutes via PM2/cron. Daily summary at 07:00 UTC.
  */
 
-import googleTrends from 'google-trends-api';
+import { interestOverTime } from './gt-client.js';
+import { getTrending } from './gt-trending.js';
 import { execSync } from 'child_process';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
@@ -135,7 +136,7 @@ async function fetchTrendInterest(keywords) {
   for (let i = 0; i < keywords.length; i += 5) {
     const batch = keywords.slice(i, i + 5);
     try {
-      const raw = await googleTrends.interestOverTime({
+      const raw = await interestOverTime({
         keyword: batch,
         startTime: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
         geo: '',  // Global
@@ -183,54 +184,47 @@ async function fetchTrendInterest(keywords) {
 }
 
 // ── Danger Keyword Check ────────────────────────────────────────────────────
+// Uses the UNWALLED /trending HTML page (gt-trending.js) instead of the legacy
+// API: the old /trends/api/* interestOverTime calls for 60 danger terms blew
+// through Google's ~6 req/min quota and re-triggered the bot-wall. The trending
+// page is semantically the right source anyway (it IS "what's trending now").
+// Cost: 0 API requests. Intensity = volume bucket/1000, peak = breakout/10.
 async function checkDangerKeywords() {
-  const dangerKeywords = [];
+  const dangerSignals = [];
+  const terms = [];
   for (const coin of COINS) {
     for (const suffix of DANGER_SUFFIXES) {
-      dangerKeywords.push(`${coin.keywords[0]} ${suffix}`);
+      terms.push({ key: `${coin.keywords[0]} ${suffix}`, coin: coin.keywords[0], type: suffix });
     }
   }
-  
-  // Check in batches of 5
-  const dangerSignals = [];
-  
-  for (let i = 0; i < dangerKeywords.length; i += 5) {
-    const batch = dangerKeywords.slice(i, i + 5);
-    try {
-      const raw = await googleTrends.interestOverTime({
-        keyword: batch,
-        startTime: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24h only
-        geo: '',
+
+  try {
+    const items = await getTrending({ geo: 'US', hours: 24 });
+    const haystack = items.map(it => ({
+      strings: [it.title, ...(it.related || [])].map(s => String(s).toLowerCase()),
+      volume: it.volume || 0,
+      breakout: it.breakout || 0,
+    }));
+
+    for (const t of terms) {
+      const hits = haystack.filter(h => h.strings.some(s => s.includes(t.key)));
+      if (!hits.length) continue;
+      const maxVol = Math.max(...hits.map(h => h.volume));
+      const maxBreak = Math.max(...hits.map(h => h.breakout));
+      const intensity = Math.round(maxVol / 1000); // 50K searches → 50
+      if (intensity < 20) continue; // noise floor: needs ~20K+ searches
+      dangerSignals.push({
+        keyword: t.key,
+        coin: t.coin,
+        dangerType: t.type,
+        intensity,
+        peak: Math.round(maxBreak / 10), // breakout 1000 → 100
       });
-      
-      const parsed = JSON.parse(raw);
-      const timelineData = parsed.default?.timelineData || [];
-      
-      for (let j = 0; j < batch.length; j++) {
-        const values = timelineData.map(d => d.value?.[j] || 0);
-        const max = Math.max(...values, 0);
-        const avg = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
-        
-        if (avg > 40 || max > 70) { // Significant search volume for danger terms
-          const coinName = batch[j].split(' ')[0];
-          const dangerType = batch[j].split(' ').slice(1).join(' ');
-          dangerSignals.push({
-            keyword: batch[j],
-            coin: coinName,
-            dangerType,
-            intensity: Math.round(avg),
-            peak: max,
-          });
-        }
-      }
-      
-      if (i + 5 < dangerKeywords.length) await sleep(2000);
-    } catch (err) {
-      // Danger keywords often have too little data, that's fine
-      await sleep(3000);
     }
+  } catch (err) {
+    log(`Danger scan failed: ${err.message}`, 'warn');
   }
-  
+
   return dangerSignals;
 }
 
